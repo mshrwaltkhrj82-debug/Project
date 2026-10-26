@@ -1,0 +1,7 @@
+node_modules/
+npm-debug.log
+production.sqlite
+production.sqlite-wal
+production.sqlite-shm
+.DS_Store
+.env
