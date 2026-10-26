@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة التحكم الأكاديمية - الإدارة المركزية</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Cairo', sans-serif; }</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-4 lg:p-8 relative">
+
+    <div id="authLockOverlay" class="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-3xl text-center shadow-2xl">
+            <div class="w-14 h-14 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            </div>
+            <h2 class="text-xl font-black text-slate-100 mb-1">منطقة محمية إدارياً</h2>
+            <p class="text-xs text-slate-400 mb-6">يرجى إدخال الرمز السري (PIN) للوصول إلى لوحة الإدارة</p>
+            
+            <form onsubmit="handleAdminLogin(event)" class="space-y-4">
+                <div>
+                    <input id="adminPinInput" type="password" maxlength="10" placeholder="أدخل الرمز السري..." required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg tracking-widest text-white focus:border-emerald-500 outline-none font-mono">
+                </div>
+                <div id="authErrorMsg" class="hidden text-xs text-rose-400 font-semibold"></div>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-emerald-950 text-sm">
+                    تأكيد الدخول
+                </button>
+                <a href="/" class="block text-xs text-slate-500 hover:text-slate-400 transition mt-2">العودة للبوابة الرئيسية</a>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboardContent" class="max-w-7xl mx-auto space-y-6 hidden">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-xl gap-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="inline-block w-3 h-3 bg-emerald-400 rounded-full animate-ping"></span>
+                    <h1 class="text-2xl font-black text-emerald-400">لوحة الإدارة المركزية والتحكم</h1>
+                </div>
+                <p class="text-xs text-slate-400 mt-1">جلسة إدارية موثقة وآمنة</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/lecturer.html" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2.5 rounded-xl border border-slate-700 transition">شاشة القاعة</a>
+                <button onclick="adminLogout()" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 text-xs font-bold px-4 py-2.5 rounded-xl transition">
+                    تسجيل الخروج
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow">
+                <span class="text-xs text-slate-400 font-semibold block">إجمالي الأساتذة</span>
+                <span id="statProfessors" class="text-3xl font-black text-slate-100 mt-2 block">0</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow">
+                <span class="text-xs text-slate-400 font-semibold block">المقررات المعتمدة</span>
+                <span id="statCourses" class="text-3xl font-black text-slate-100 mt-2 block">0</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow">
+                <span class="text-xs text-slate-400 font-semibold block">الجلسات المفتوحة الآن</span>
+                <span id="statActiveSessions" class="text-3xl font-black text-amber-400 mt-2 block">0</span>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl shadow">
+                <span class="text-xs text-slate-400 font-semibold block">إجمالي سجلات الحضور</span>
+                <span id="statAttendance" class="text-3xl font-black text-emerald-400 mt-2 block">0</span>
+            </div>
+        </div>
+
+        <div class="flex border-b border-slate-800 gap-2 pb-2">
+            <button onclick="switchTab('professorsTab')" id="btnTabProfessors" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 text-white transition">إدارة الأساتذة</button>
+            <button onclick="switchTab('coursesTab')" id="btnTabCourses" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-slate-400 hover:text-white transition">إدارة المقررات</button>
+            <button onclick="switchTab('sessionsTab')" id="btnTabSessions" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-slate-400 hover:text-white transition">مراقبة الجلسات والقاعات</button>
+        </div>
+
+        <!-- 1. تبويب الأساتذة -->
+        <section id="professorsTab" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-4 bg-slate-900 border border-slate-800 p-6 rounded-3xl h-fit">
+                <h3 class="text-base font-bold text-slate-200 mb-4 border-b border-slate-800 pb-2">إضافة تدريسي جديد</h3>
+                <form id="addProfForm" onsubmit="saveProfessor(event)" class="space-y-3">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">الاسم الرباعي:</label>
+                        <input id="profName" required type="text" placeholder="د. أحمد خالد" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">البريد الإلكتروني:</label>
+                        <input id="profEmail" required type="email" placeholder="ahmed@univ.edu.iq" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none font-mono">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">القسم العلمي:</label>
+                        <input id="profDept" required type="text" placeholder="علوم الحاسوب" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">الهاتف:</label>
+                        <input id="profPhone" type="text" placeholder="07XXXXXXXXX" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none font-mono">
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition text-sm mt-2">حفظ البيانات</button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-8 bg-slate-900 border border-slate-800 p-6 rounded-3xl overflow-hidden">
+                <h3 class="text-base font-bold text-slate-200 mb-4">قائمة الأساتذة</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-slate-800/60 text-slate-400 text-xs">
+                            <tr>
+                                <th class="p-3 rounded-r-xl">الاسم</th>
+                                <th class="p-3">القسم</th>
+                                <th class="p-3">البريد</th>
+                                <th class="p-3">الهاتف</th>
+                                <th class="p-3 rounded-l-xl text-center">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="professorsTableBody" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. تبويب المقررات -->
+        <section id="coursesTab" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-4 bg-slate-900 border border-slate-800 p-6 rounded-3xl h-fit">
+                <h3 class="text-base font-bold text-slate-200 mb-4 border-b border-slate-800 pb-2">تسجيل مادة دراسية</h3>
+                <form id="addCourseForm" onsubmit="saveCourse(event)" class="space-y-3">
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">رمز المقرر:</label>
+                        <input id="courseCode" required type="text" placeholder="CS401" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none uppercase font-mono">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">اسم المادة:</label>
+                        <input id="courseName" required type="text" placeholder="الذكاء الاصطناعي" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">القسم:</label>
+                        <input id="courseDept" required type="text" placeholder="علوم الحاسوب" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-400 block mb-1">الأستاذ المشرف:</label>
+                        <select id="courseProfSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none">
+                            <option value="">بدون تعيين</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded-xl transition text-sm mt-2">إضافة المقرر</button>
+                </form>
+            </div>
+
+            <div class="lg:col-span-8 bg-slate-900 border border-slate-800 p-6 rounded-3xl overflow-hidden">
+                <h3 class="text-base font-bold text-slate-200 mb-4">دليل المقررات المعتمدة</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-right text-sm">
+                        <thead class="bg-slate-800/60 text-slate-400 text-xs">
+                            <tr>
+                                <th class="p-3 rounded-r-xl">الرمز</th>
+                                <th class="p-3">المادة</th>
+                                <th class="p-3">القسم</th>
+                                <th class="p-3">الأستاذ</th>
+                                <th class="p-3 rounded-l-xl text-center">إجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coursesTableBody" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. تبويب الجلسات -->
+        <section id="sessionsTab" class="hidden bg-slate-900 border border-slate-800 p-6 rounded-3xl space-y-4">
+            <div class="flex justify-between items-center">
+                <h3 class="text-base font-bold text-slate-200">مراقبة الجلسات والقاعات الحية</h3>
+                <button onclick="loadSessions()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg border border-slate-700">تحديث</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-right text-sm">
+                    <thead class="bg-slate-800/60 text-slate-400 text-xs">
+                        <tr>
+                            <th class="p-3 rounded-r-xl">معرّف الجلسة</th>
+                            <th class="p-3">المقرر / القاعة</th>
+                            <th class="p-3">وقت التدشين</th>
+                            <th class="p-3">الطلبة</th>
+                            <th class="p-3">الحالة</th>
+                            <th class="p-3 rounded-l-xl text-center">التحكم</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sessionsTableBody" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        let cachedProfessors = [];
+
+        async function authFetch(url, options = {}) {
+            const token = sessionStorage.getItem('admin_token');
+            const headers = options.headers || {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(url, { ...options, headers });
+            if (res.status === 401) {
+                sessionStorage.removeItem('admin_token');
+                showLockScreen();
+                throw new Error("انتهت الجلسة");
+            }
+            return res;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = sessionStorage.getItem('admin_token');
+            if (token) unlockDashboard();
+            else showLockScreen();
+        });
+
+        function showLockScreen() {
+            document.getElementById('authLockOverlay').classList.remove('hidden');
+            document.getElementById('dashboardContent').classList.add('hidden');
+        }
+
+        function unlockDashboard() {
+            document.getElementById('authLockOverlay').classList.add('hidden');
+            document.getElementById('dashboardContent').classList.remove('hidden');
+            refreshStats();
+            loadProfessors();
+            loadCourses();
+            loadSessions();
+        }
+
+        async function handleAdminLogin(e) {
+            e.preventDefault();
+            const pin = document.getElementById('adminPinInput').value;
+            const errBox = document.getElementById('authErrorMsg');
+            errBox.classList.add('hidden');
+
+            try {
+                const res = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pin })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    sessionStorage.setItem('admin_token', data.token);
+                    document.getElementById('adminPinInput').value = '';
+                    unlockDashboard();
+                } else {
+                    errBox.innerText = data.message;
+                    errBox.classList.remove('hidden');
+                }
+            } catch (err) {
+                errBox.innerText = "فشل الاتصال بالخادم";
+                errBox.classList.remove('hidden');
+            }
+        }
+
+        function adminLogout() {
+            sessionStorage.removeItem('admin_token');
+            location.reload();
+        }
+
+        function switchTab(tabId) {
+            ['professorsTab', 'coursesTab', 'sessionsTab'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(tabId).classList.remove('hidden');
+
+            const btnMap = {
+                'professorsTab': 'btnTabProfessors',
+                'coursesTab': 'btnTabCourses',
+                'sessionsTab': 'btnTabSessions'
+            };
+
+            ['btnTabProfessors', 'btnTabCourses', 'btnTabSessions'].forEach(b => {
+                document.getElementById(b).className = "px-5 py-2.5 rounded-xl text-sm font-bold bg-slate-900 text-slate-400 hover:text-white transition";
+            });
+            document.getElementById(btnMap[tabId]).className = "px-5 py-2.5 rounded-xl text-sm font-bold bg-emerald-600 text-white transition";
+        }
+
+        async function refreshStats() {
+            try {
+                const res = await authFetch('/api/admin/stats');
+                const data = await res.json();
+                if (data.success) {
+                    document.getElementById('statProfessors').innerText = data.stats.totalProfessors;
+                    document.getElementById('statCourses').innerText = data.stats.totalCourses;
+                    document.getElementById('statActiveSessions').innerText = data.stats.activeSessions;
+                    document.getElementById('statAttendance').innerText = data.stats.totalAttendance;
+                }
+            } catch (e) {}
+        }
+
+        async function loadProfessors() {
+            try {
+                const res = await authFetch('/api/admin/professors');
+                const data = await res.json();
+                if (data.success) {
+                    cachedProfessors = data.professors;
+                    const tbody = document.getElementById('professorsTableBody');
+                    tbody.innerHTML = data.professors.length === 0 ? '<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">لا يوجد أساتذة مسجلون</td></tr>' :
+                        data.professors.map(p => `
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-semibold text-slate-100">${p.name}</td>
+                                <td class="p-3 text-xs text-slate-400">${p.department}</td>
+                                <td class="p-3 text-xs font-mono text-emerald-400">${p.email}</td>
+                                <td class="p-3 text-xs font-mono text-slate-400">${p.phone || '-'}</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="deleteProfessor(${p.id})" class="text-rose-400 hover:text-rose-300 text-xs font-bold p-1 bg-rose-500/10 rounded-lg border border-rose-500/20">حذف</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                    updateProfDropdown();
+                }
+            } catch (e) {}
+        }
+
+        function updateProfDropdown() {
+            const select = document.getElementById('courseProfSelect');
+            select.innerHTML = '<option value="">بدون تعيين حالياً</option>' + 
+                cachedProfessors.map(p => `<option value="${p.id}">${p.name} (${p.department})</option>`).join('');
+        }
+
+        async function saveProfessor(e) {
+            e.preventDefault();
+            const payload = {
+                name: document.getElementById('profName').value,
+                email: document.getElementById('profEmail').value,
+                department: document.getElementById('profDept').value,
+                phone: document.getElementById('profPhone').value
+            };
+            const res = await authFetch('/api/admin/professors', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('addProfForm').reset();
+                loadProfessors();
+                refreshStats();
+            } else alert(data.message);
+        }
+
+        async function deleteProfessor(id) {
+            if (!confirm('هل أنت متأكد من الحذف؟')) return;
+            await authFetch(`/api/admin/professors/${id}`, { method: 'DELETE' });
+            loadProfessors();
+            loadCourses();
+            refreshStats();
+        }
+
+        async function loadCourses() {
+            try {
+                const res = await authFetch('/api/admin/courses');
+                const data = await res.json();
+                if (data.success) {
+                    const tbody = document.getElementById('coursesTableBody');
+                    tbody.innerHTML = data.courses.length === 0 ? '<tr><td colspan="5" class="text-center py-6 text-slate-500 text-xs">لا توجد مقررات مضافة</td></tr>' :
+                        data.courses.map(c => `
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-mono font-bold text-amber-400 text-xs">${c.code}</td>
+                                <td class="p-3 font-semibold text-slate-100">${c.name}</td>
+                                <td class="p-3 text-xs text-slate-400">${c.department}</td>
+                                <td class="p-3 text-xs text-slate-300">${c.professor_name || '<span class="text-slate-500">غير محدد</span>'}</td>
+                                <td class="p-3 text-center">
+                                    <button onclick="deleteCourse(${c.id})" class="text-rose-400 hover:text-rose-300 text-xs font-bold p-1 bg-rose-500/10 rounded-lg border border-rose-500/20">حذف</button>
+                                </td>
+                            </tr>
+                        `).join('');
+                }
+            } catch (e) {}
+        }
+
+        async function saveCourse(e) {
+            e.preventDefault();
+            const payload = {
+                code: document.getElementById('courseCode').value,
+                name: document.getElementById('courseName').value,
+                department: document.getElementById('courseDept').value,
+                professorId: document.getElementById('courseProfSelect').value || null
+            };
+            const res = await authFetch('/api/admin/courses', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById('addCourseForm').reset();
+                loadCourses();
+                refreshStats();
+            } else alert(data.message);
+        }
+
+        async function deleteCourse(id) {
+            if (!confirm('تأكيد حذف المقرر الدراسي؟')) return;
+            await authFetch(`/api/admin/courses/${id}`, { method: 'DELETE' });
+            loadCourses();
+            refreshStats();
+        }
+
+        async function loadSessions() {
+            try {
+                const res = await authFetch('/api/admin/sessions');
+                const data = await res.json();
+                if (data.success) {
+                    const tbody = document.getElementById('sessionsTableBody');
+                    tbody.innerHTML = data.sessions.length === 0 ? '<tr><td colspan="6" class="text-center py-6 text-slate-500 text-xs">لا توجد جلسات</td></tr>' :
+                        data.sessions.map(s => `
+                            <tr class="hover:bg-slate-800/30">
+                                <td class="p-3 font-mono text-xs text-slate-400">${s.id}</td>
+                                <td class="p-3 font-bold text-slate-200 text-xs">${s.course_name}</td>
+                                <td class="p-3 text-xs text-slate-400">${new Date(s.created_at).toLocaleString('ar-IQ')}</td>
+                                <td class="p-3 font-bold text-emerald-400 text-xs">${s.attendees_count} طالب</td>
+                                <td class="p-3 text-xs">
+                                    ${s.is_active ? '<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md font-bold">نشطة</span>' : '<span class="text-slate-500">مغلقة</span>'}
+                                </td>
+                                <td class="p-3 text-center">
+                                    ${s.is_active ? `<button onclick="forceCloseSession('${s.id}')" class="text-xs bg-rose-600/80 hover:bg-rose-600 text-white px-2.5 py-1 rounded-lg font-bold">إيقاف</button>` : `<a href="/api/sessions/${s.id}/export" class="text-xs text-slate-400 hover:text-white underline">Excel</a>`}
+                                </td>
+                            </tr>
+                        `).join('');
+                }
+            } catch (e) {}
+        }
+
+        async function forceCloseSession(id) {
+            if (!confirm('إنهاء هذه المحاضرة فوراً؟')) return;
+            await authFetch(`/api/admin/sessions/${id}/force-close`, { method: 'POST' });
+            loadSessions();
+            refreshStats();
+        }
+    </script>
+</body>
+</html>
