@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل حضور الطالب</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Cairo', sans-serif; }</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl">
+        <div class="text-center mb-6">
+            <h1 class="text-xl font-bold text-emerald-400">توثيق حضور الطالب</h1>
+            <p class="text-xs text-slate-400 mt-1">وجّه الكاميرا نحو كود القاعة المعروض</p>
+        </div>
+
+        <div class="space-y-3 mb-5">
+            <div>
+                <label class="text-xs text-slate-400 font-bold block mb-1">الاسم الرباعي:</label>
+                <input id="nameInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none">
+            </div>
+            <div>
+                <label class="text-xs text-slate-400 font-bold block mb-1">الرقم الجامعي:</label>
+                <input id="idInput" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:border-emerald-500 outline-none font-mono">
+            </div>
+        </div>
+
+        <div class="relative bg-black rounded-2xl overflow-hidden border border-slate-800 min-h-[260px] flex items-center justify-center mb-4">
+            <div id="preview" class="w-full"></div>
+            <button id="camBtn" onclick="openCam()" class="absolute bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-xl transition">
+                تشغيل الكاميرا للمسح
+            </button>
+        </div>
+
+        <div id="msgBox" class="hidden p-3.5 rounded-xl text-xs font-semibold mb-3"></div>
+        <p class="text-[11px] text-center text-slate-500">مؤمن ببصمة العتاد وفحص التواجد المكاني GPS</p>
+    </div>
+
+    <script>
+        let scanner = null;
+
+        function getHardwareHash() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = "top";
+            ctx.font = "14px 'Arial'";
+            ctx.fillStyle = "#f60";
+            ctx.fillRect(100, 1, 50, 20);
+            ctx.fillStyle = "#069";
+            ctx.fillText("AcademicApp2026", 2, 15);
+            const str = canvas.toDataURL() + navigator.userAgent + screen.width + "x" + screen.height;
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return 'HW-' + Math.abs(hash).toString(16);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('nameInput').value = localStorage.getItem('s_name') || '';
+            document.getElementById('idInput').value = localStorage.getItem('s_id') || '';
+        });
+
+        function alertMsg(txt, ok) {
+            const box = document.getElementById('msgBox');
+            box.className = `p-3.5 rounded-xl text-xs font-semibold mb-3 ${ok ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'}`;
+            box.innerText = txt;
+            box.classList.remove('hidden');
+        }
+
+        async function openCam() {
+            const name = document.getElementById('nameInput').value.trim();
+            const id = document.getElementById('idInput').value.trim();
+            if (!name || !id) return alert("يرجى ملء الاسم والرقم الجامعي أولاً");
+
+            localStorage.setItem('s_name', name);
+            localStorage.setItem('s_id', id);
+
+            document.getElementById('camBtn').classList.add('hidden');
+            scanner = new Html5Qrcode("preview");
+
+            try {
+                await scanner.start(
+                    { facingMode: "environment" },
+                    { fps: 15, qrbox: 240 },
+                    onScan
+                );
+            } catch (e) {
+                alertMsg("تعذر فتح الكاميرا: تحقق من تفعيل الإذن بالمتصفح", false);
+                document.getElementById('camBtn').classList.remove('hidden');
+            }
+        }
+
+        async function onScan(decoded) {
+            if (scanner) await scanner.stop();
+            alertMsg("تم التقاط الرمز، جاري التحقق من الموقع والأمان...", true);
+
+            try {
+                const parsed = JSON.parse(decoded);
+                if (!parsed.sid || !parsed.tok) throw new Error();
+
+                navigator.geolocation.getCurrentPosition(
+                    (p) => send(parsed.sid, parsed.tok, p.coords.latitude, p.coords.longitude),
+                    () => send(parsed.sid, parsed.tok, null, null),
+                    { enableHighAccuracy: true, timeout: 6000 }
+                );
+            } catch {
+                alertMsg("كود QR غير صالح", false);
+                document.getElementById('camBtn').classList.remove('hidden');
+            }
+        }
+
+        async function send(sid, tok, lat, lng) {
+            const name = document.getElementById('nameInput').value.trim();
+            const id = document.getElementById('idInput').value.trim();
+
+            try {
+                const res = await fetch('/api/attendance/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sid,
+                        token: tok,
+                        studentId: id,
+                        studentName: name,
+                        fingerprint: getHardwareHash(),
+                        latitude: lat,
+                        longitude: lng
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    alertMsg(`✅ ${data.message} (${data.data.scan_time})`, true);
+                } else {
+                    alertMsg(`❌ ${data.message}`, false);
+                    document.getElementById('camBtn').classList.remove('hidden');
+                }
+            } catch (err) {
+                alertMsg("خطأ في الاتصال بالخادم", false);
+                document.getElementById('camBtn').classList.remove('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
