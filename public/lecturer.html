@@ -1,0 +1,174 @@
+
+
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>شاشة العرض المركزية - المحاضر</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>body { font-family: 'Cairo', sans-serif; }</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6">
+    <div class="max-w-7xl mx-auto">
+        <header class="flex justify-between items-center bg-slate-900 border border-slate-800 p-5 rounded-2xl mb-6 shadow-xl">
+            <div>
+                <h1 class="text-2xl font-black text-emerald-400">لوحة العرض المتزامنة للقاعة</h1>
+                <p class="text-xs text-slate-400" id="sessionStatus">لم تبدأ الجلسة بعد</p>
+            </div>
+            <div class="flex gap-3">
+                <button id="btnStart" onclick="startSession()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl font-bold transition">بدء المحاضرة</button>
+                <button id="btnClose" onclick="endSession()" disabled class="bg-rose-600/80 hover:bg-rose-600 text-white px-4 py-2.5 rounded-xl font-bold transition disabled:opacity-30">إنهاء الجلسة</button>
+                <button id="btnExport" onclick="exportExcel()" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl font-bold transition disabled:opacity-30">تصدير Excel</button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-7 bg-slate-900 border border-slate-800 p-8 rounded-3xl flex flex-col items-center justify-center min-h-[500px]">
+                <div id="standbyText" class="text-slate-500 text-center">
+                    <p class="text-base">اضغط على "بدء المحاضرة" لتوليد وتفعيل رمز القاعة المشفر</p>
+                </div>
+                <div id="qrArea" class="hidden flex flex-col items-center">
+                    <div class="p-6 bg-white rounded-3xl shadow-2xl mb-6">
+                        <div id="qrcode"></div>
+                    </div>
+                    <div class="flex items-center gap-3 bg-slate-800/90 px-6 py-2.5 rounded-full border border-slate-700">
+                        <span class="text-xs text-slate-300 font-semibold">تحديث الرمز بعد:</span>
+                        <span id="countdown" class="text-2xl font-black text-amber-400 font-mono">10</span>
+                        <span class="text-xs text-slate-400">ثانية</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 bg-slate-900 border border-slate-800 p-6 rounded-3xl flex flex-col">
+                <div class="flex justify-between items-center mb-4 pb-3 border-b border-slate-800">
+                    <h2 class="text-lg font-bold">سجل الحضور اللحظي</h2>
+                    <span id="badgeCount" class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs px-3 py-1 rounded-full font-bold">0 طالب</span>
+                </div>
+                <div id="attendeesBox" class="flex-1 overflow-y-auto max-h-[420px] space-y-2 pr-1">
+                    <p class="text-slate-500 text-center py-16 text-sm">في انتظار أول طالب...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let currentSessionId = null;
+        let qr = null;
+        let count = 0;
+
+        async function startSession() {
+            let courseName = "محاضرة عامة";
+            try {
+                const res = await fetch('/api/courses/public');
+                const data = await res.json();
+                if (data.success && data.courses.length > 0) {
+                    const options = data.courses.map((c, i) => `${i + 1}. [${c.code}] ${c.name} - ${c.professor_name || ''}`).join('\n');
+                    const choice = prompt(`اختر رقم المقرر الدراسي من القائمة المعتمدة:\n${options}`, "1");
+                    if (!choice) return;
+                    const selected = data.courses[parseInt(choice) - 1];
+                    if (selected) courseName = `${selected.code} - ${selected.name}`;
+                } else {
+                    const manual = prompt("أدخل اسم المحاضرة:", "هندسة البرمجيات");
+                    if (!manual) return;
+                    courseName = manual;
+                }
+            } catch {
+                const manual = prompt("أدخل اسم المحاضرة:", "هندسة البرمجيات");
+                if (!manual) return;
+                courseName = manual;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                (p) => init(courseName, p.coords.latitude, p.coords.longitude),
+                () => init(courseName, 0, 0),
+                { timeout: 5000 }
+            );
+        }
+
+        async function init(name, lat, lng) {
+            const res = await fetch('/api/sessions/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ courseName: name, latitude: lat, longitude: lng, radiusMeters: 40 })
+            });
+            const data = await res.json();
+            if (!data.success) return alert(data.message);
+
+            currentSessionId = data.sessionId;
+            document.getElementById('sessionStatus').innerText = `${name} | كود: ${currentSessionId}`;
+            document.getElementById('standbyText').classList.add('hidden');
+            document.getElementById('qrArea').classList.remove('hidden');
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnClose').disabled = false;
+            document.getElementById('btnExport').disabled = false;
+
+            socket.emit('join_lecture', currentSessionId);
+            runTokenLoop();
+        }
+
+        socket.on('new_attendee', (item) => {
+            count++;
+            document.getElementById('badgeCount').innerText = `${count} طالب`;
+            const box = document.getElementById('attendeesBox');
+            if (count === 1) box.innerHTML = '';
+
+            const row = document.createElement('div');
+            row.className = "flex items-center justify-between bg-slate-800/60 p-3 rounded-xl border border-slate-700/60";
+            row.innerHTML = `
+                <div>
+                    <h4 class="font-bold text-slate-100 text-sm">${item.student_name}</h4>
+                    <span class="text-xs text-slate-400 font-mono">${item.student_id}</span>
+                </div>
+                <div class="text-left">
+                    <span class="text-xs text-emerald-400 font-bold block">${item.scan_time}</span>
+                    <span class="text-[10px] text-slate-400">${item.distance} متر</span>
+                </div>
+            `;
+            box.prepend(row);
+        });
+
+        function runTokenLoop() {
+            async function refresh() {
+                if (!currentSessionId) return;
+                const res = await fetch(`/api/sessions/${currentSessionId}/token`);
+                const data = await res.json();
+                if (data.success) {
+                    const payload = JSON.stringify({ sid: data.sessionId, tok: data.token });
+                    if (!qr) {
+                        qr = new QRCode(document.getElementById("qrcode"), {
+                            text: payload, width: 260, height: 260,
+                            colorDark: "#020617", colorLight: "#ffffff"
+                        });
+                    } else {
+                        qr.clear();
+                        qr.makeCode(payload);
+                    }
+                }
+            }
+            refresh();
+            setInterval(refresh, 5000);
+
+            let s = 10;
+            setInterval(() => {
+                s = s <= 1 ? 10 : s - 1;
+                document.getElementById('countdown').innerText = s;
+            }, 1000);
+        }
+
+        async function endSession() {
+            if (!confirm("تأكيد إغلاق المحاضرة؟")) return;
+            await fetch(`/api/sessions/${currentSessionId}/close`, { method: 'POST' });
+            location.reload();
+        }
+
+        function exportExcel() {
+            if (currentSessionId) window.location.href = `/api/sessions/${currentSessionId}/export`;
+        }
+    </script>
+</body>
+</html>
